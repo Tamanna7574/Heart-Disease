@@ -2,56 +2,47 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
+import matplotlib.pyplot as plt
+import seaborn as sns
 import os
+
+st.set_page_config(page_title="Heart Disease Prediction", page_icon="❤️")
 
 DATA_FILE = "heart_dataset.csv"
 MODEL_FILE = "heart_pipeline.pkl"
+TARGET_COL = "target"
 
-# possible target column names in different datasets
-POSSIBLE_TARGETS = ["num", "target", "output", "condition", "heart_disease"]
-
-numeric_cols = ['age', 'trestbps', 'chol', 'thalch', 'oldpeak', 'ca']
-categorical_cols = ['sex', 'cp', 'fbs', 'restecg', 'exang', 'slope', 'thal']
-
-
+# ------------------------------
+# Load or Train Model
+# ------------------------------
 @st.cache_resource
 def load_or_train_model():
-    # load dataset
+    if os.path.exists(MODEL_FILE):
+        return joblib.load(MODEL_FILE)
+
+    st.warning("🔁 Model not found — training a new model...")
+
     df = pd.read_csv(DATA_FILE)
 
-    # auto-detect target column
-    target_col = None
-    for col in POSSIBLE_TARGETS:
-        if col in df.columns:
-            target_col = col
-            break
+    # Separate features & target
+    X = df.drop(TARGET_COL, axis=1)
+    y = df[TARGET_COL]
 
-    if target_col is None:
-        st.error("❌ Target column not found in CSV. Expected one of: " + ", ".join(POSSIBLE_TARGETS))
-        st.stop()
+    # Identify numeric and categorical features
+    numeric_cols = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    categorical_cols = X.select_dtypes(include=['object', 'bool']).columns.tolist()
 
-    st.info(f"🎯 Target column detected automatically: `{target_col}`")
-
-    if os.path.exists(MODEL_FILE):
-        st.success("📌 Loaded trained model")
-        return joblib.load(MODEL_FILE), target_col
-
-    st.warning("⚠️ Model not found — training new model...")
-
-    X = df.drop(target_col, axis=1)
-    y = (df[target_col] > 0).astype(int)
-
+    # Preprocessing
     preprocessor = ColumnTransformer([
         ("num", StandardScaler(), numeric_cols),
         ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols)
     ])
 
+    # Full pipeline
     pipeline = Pipeline([
         ("preprocessor", preprocessor),
         ("model", RandomForestClassifier(n_estimators=200, random_state=42))
@@ -59,51 +50,78 @@ def load_or_train_model():
 
     pipeline.fit(X, y)
     joblib.dump(pipeline, MODEL_FILE)
-    st.success("🎉 Model trained & saved successfully")
 
-    return pipeline, target_col
+    st.success("✅ Model trained & saved!")
+    return pipeline
 
 
-pipeline, target_col = load_or_train_model()
+pipeline = load_or_train_model()
+
+# ------------------------------
+# Streamlit UI
+# ------------------------------
 st.title("❤️ Heart Disease Prediction Dashboard")
 
-menu = st.sidebar.radio("📌 Navigate", ["Home", "Prediction", "Analysis", "Contact"])
+menu = st.sidebar.radio("📌 Menu", ["🏠 Home", "🩺 Prediction", "📊 Data Analysis"])
 
-if menu == "Home":
-    st.write("Welcome to the ML Heart Disease Prediction App")
+# ------------------------------
+# Home
+# ------------------------------
+if menu == "🏠 Home":
+    st.write("""
+    Welcome to the **Heart Disease Prediction Web App**  
+    Built using **Machine Learning + Streamlit** ❤️  
+    """)
 
-elif menu == "Prediction":
-    st.header("🩺 Patient Details")
+    st.image("https://cdn-icons-png.flaticon.com/512/3774/3774299.png", width=260)
+    st.info("Navigate to **Prediction** to check patient's heart disease risk.")
 
-    user = {
-        "age": st.number_input("Age", 1, 120, 50),
-        "trestbps": st.number_input("Resting BP", 80, 200, 120),
-        "chol": st.number_input("Cholesterol", 100, 600, 240),
-        "thalch": st.number_input("Max Heart Rate", 60, 250, 150),
-        "oldpeak": st.number_input("ST Depression", 0.0, 10.0, 1.0),
-        "ca": st.number_input("Major Vessels (0-4)", 0, 4, 0),
-        "sex": st.selectbox("Sex", ["0", "1"]),
-        "cp": st.selectbox("Chest Pain Type", ["0", "1", "2", "3"]),
-        "fbs": st.selectbox("Fasting Blood Sugar > 120 mg/dl", ["0", "1"]),
-        "restecg": st.selectbox("Resting ECG", ["0", "1", "2"]),
-        "exang": st.selectbox("Exercise Induced Angina", ["0", "1"]),
-        "slope": st.selectbox("Slope", ["0", "1", "2"]),
-        "thal": st.selectbox("Thalassemia", ["0", "1", "2"])
-    }
+# ------------------------------
+# Prediction Page
+# ------------------------------
+elif menu == "🩺 Prediction":
+    st.header("🧑‍⚕️ Patient Details")
 
-    df_user = pd.DataFrame([user])
+    df = pd.read_csv(DATA_FILE)
+    input_cols = df.drop(TARGET_COL, axis=1).columns.tolist()
+
+    user_input = {}
+
+    for col in input_cols:
+        if df[col].dtype == 'object':
+            user_input[col] = st.selectbox(col, df[col].unique())
+        elif df[col].dtype == 'bool':
+            user_input[col] = st.selectbox(col, [True, False])
+        else:
+            user_input[col] = st.number_input(col, value=float(df[col].median()))
+
+    user_input_df = pd.DataFrame([user_input])
 
     if st.button("🔍 Predict"):
-        result = pipeline.predict(df_user)[0]
-        if result == 1:
-            st.error("⚠️ High Risk — Patient may have heart disease")
+        prediction = pipeline.predict(user_input_df)[0]
+        if prediction == 1:
+            st.error("⚠️ Patient is at **high risk of heart disease**")
         else:
-            st.success("✅ Low Risk — Patient is likely healthy")
+            st.success("💚 Patient is at **low risk of heart disease**")
 
-elif menu == "Analysis":
-    st.header("📊 Dataset Analysis")
+# ------------------------------
+# Data Analysis
+# ------------------------------
+elif menu == "📊 Data Analysis":
     df = pd.read_csv(DATA_FILE)
+    st.header("📊 Dataset Overview")
     st.dataframe(df.head())
 
-elif menu == "Contact":
-    st.write("Made with ❤️ by Tamanna")
+    st.subheader("📈 Numeric Feature Distributions")
+    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    numeric_cols.remove(TARGET_COL)
+
+    fig, axes = plt.subplots(len(numeric_cols)//3 + 1, 3, figsize=(14, 10))
+    axes = axes.flatten()
+    for i, col in enumerate(numeric_cols):
+        sns.histplot(df[col], kde=True, ax=axes[i])
+        axes[i].set_title(col)
+    plt.tight_layout()
+    st.pyplot(fig)
+
+st.markdown("<br><center>Made with ❤️ by Tamanna | CSE Project</center>", unsafe_allow_html=True)
