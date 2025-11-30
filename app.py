@@ -54,7 +54,6 @@ def load_or_train_model():
     st.success("✅ Model trained & saved!")
     return pipeline
 
-
 pipeline = load_or_train_model()
 
 # ------------------------------
@@ -72,7 +71,6 @@ if menu == "🏠 Home":
     Welcome to the **Heart Disease Prediction Web App**  
     Built using **Machine Learning + Streamlit** ❤️  
     """)
-
     st.image("https://cdn-icons-png.flaticon.com/512/3774/3774299.png", width=260)
     st.info("Navigate to **Prediction** to check patient's heart disease risk.")
 
@@ -84,18 +82,23 @@ elif menu == "🩺 Prediction":
 
     df = pd.read_csv(DATA_FILE)
     input_cols = df.drop(TARGET_COL, axis=1).columns.tolist()
-
     user_input = {}
 
     for col in input_cols:
         if df[col].dtype == 'object':
             user_input[col] = st.selectbox(col, df[col].unique())
-        elif df[col].dtype == 'bool':
-            user_input[col] = st.selectbox(col, [True, False])
+        elif df[col].dtype == 'bool' or df[col].nunique() == 2:
+            user_input[col] = int(st.selectbox(col, [0, 1]))
         else:
             user_input[col] = st.number_input(col, value=float(df[col].median()))
 
     user_input_df = pd.DataFrame([user_input])
+
+    # Ensure columns match pipeline's feature order
+    try:
+        user_input_df = user_input_df[pipeline.named_steps['preprocessor'].feature_names_in_]
+    except:
+        pass  # fallback if feature names_in_ not available
 
     if st.button("🔍 Predict"):
         prediction = pipeline.predict(user_input_df)[0]
@@ -121,6 +124,9 @@ elif menu == "📊 Data Analysis":
     for i, col in enumerate(numeric_cols):
         sns.histplot(df[col], kde=True, ax=axes[i])
         axes[i].set_title(col)
+    # Hide extra axes
+    for j in range(i+1, len(axes)):
+        axes[j].axis('off')
     plt.tight_layout()
     st.pyplot(fig)
 
