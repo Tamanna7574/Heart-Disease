@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Heart Disease Prediction App (Final Deployment Ready)
-"""
-
 import streamlit as st
 import pandas as pd
 import joblib
@@ -12,104 +8,108 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
+import os
 
 DATA_FILE = "heart_dataset.csv"
 MODEL_FILE = "heart_pipeline.pkl"
-TARGET_COL = "target"   # <-- change this if your CSV uses CLASS/OUTPUT/NUM
+TARGET_COL = "num"
 
-# -----------------------------
-# Load dataset and model
-# -----------------------------
+numeric_cols = ['age', 'trestbps', 'chol', 'thalch', 'oldpeak', 'ca']
+categorical_cols = ['sex', 'cp', 'fbs', 'restecg', 'exang', 'slope', 'thal']
+
+
 @st.cache_resource
 def load_or_train_model():
-    try:
+    if os.path.exists(MODEL_FILE):
+        st.info("📌 Loaded trained model")
         return joblib.load(MODEL_FILE)
-    except:
-        st.warning("⚠️ Model not found — training new model...")
-        df = pd.read_csv(DATA_FILE)
 
-        numeric_cols = ['age', 'trestbps', 'chol', 'thalch', 'oldpeak', 'ca']
-        categorical_cols = ['sex', 'cp', 'fbs', 'restecg', 'exang', 'slope', 'thal']
+    st.warning("⚠️ Model not found — training new model...")
+    df = pd.read_csv(DATA_FILE)
 
-        preprocessor = ColumnTransformer([
-            ("num", StandardScaler(), numeric_cols),
-            ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols)
-        ])
+    X = df.drop(TARGET_COL, axis=1)
+    y = (df[TARGET_COL] > 0).astype(int)
 
-        X = df.drop(TARGET_COL, axis=1)
-        y = df[TARGET_COL]
+    preprocessor = ColumnTransformer([
+        ("num", StandardScaler(), numeric_cols),
+        ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols)
+    ])
 
-        pipeline = Pipeline([
-            ("preprocessor", preprocessor),
-            ("model", RandomForestClassifier(n_estimators=100, random_state=42))
-        ])
+    pipeline = Pipeline([
+        ("preprocessor", preprocessor),
+        ("model", RandomForestClassifier(n_estimators=200, random_state=42))
+    ])
 
-        pipeline.fit(X, y)
-        joblib.dump(pipeline, MODEL_FILE)
-        st.success("✔ Model trained & saved!")
+    pipeline.fit(X, y)
+    joblib.dump(pipeline, MODEL_FILE)
+    st.success("🎉 Model trained & saved successfully")
+    return pipeline
 
-        return pipeline
 
 pipeline = load_or_train_model()
 
-# -----------------------------
-# Streamlit app UI
-# -----------------------------
+
+# --------------------------------------------------------------
+# Streamlit UI
+# --------------------------------------------------------------
+
 st.title("❤️ Heart Disease Prediction Dashboard")
-tab = st.sidebar.radio("📌 Menu", ["🏠 Home", "🩺 Prediction", "📊 Analysis", "📞 Contact"])
 
+menu = st.sidebar.radio("📌 Navigate", ["Home", "Prediction", "Analysis", "Contact"])
 
-# ----------------------------- HOME
-if tab == "🏠 Home":
-    st.image("https://cdn-icons-png.flaticon.com/512/3774/3774299.png", width=250)
+# --------------------------------------------------------------
+# Home
+# --------------------------------------------------------------
+if menu == "Home":
+    st.image("https://cdn-icons-png.flaticon.com/512/3774/3774299.png", width=200)
     st.write("""
-    Welcome! This app predicts **heart disease risk** using Machine Learning.
-    - 🩺 Smart prediction
-    - 📊 Visual data analytics
-    - 🔥 Auto-trained ML model
+    Welcome to the **Heart Disease Prediction System**  
+    Built using **Python + Machine Learning + Streamlit**  
+    Navigate using the sidebar to test prediction & explore data insights.
     """)
 
+# --------------------------------------------------------------
+# Prediction
+# --------------------------------------------------------------
+elif menu == "Prediction":
+    st.header("🩺 Patient Details")
 
-# ----------------------------- PREDICTION
-elif tab == "🩺 Prediction":
-    st.header("🩺 Enter Patient Details")
-
-    user_input = {
-        "age": st.number_input("Age", min_value=1, max_value=120, value=46),
-        "trestbps": st.number_input("Resting Blood Pressure", value=120),
-        "chol": st.number_input("Cholesterol", value=200),
-        "thalch": st.number_input("Max Heart Rate Achieved", value=150),
-        "oldpeak": st.number_input("ST Depression", value=1.0),
-        "ca": st.number_input("Major Vessels (0–4)", min_value=0, max_value=4, value=0),
-        "sex": st.selectbox("Sex", ["male", "female"]),
-        "cp": st.selectbox("Chest Pain Type", ["typical angina", "atypical angina", "non-anginal", "asymptomatic"]),
-        "fbs": st.selectbox("Fasting Blood Sugar >120 mg/dl", [0, 1]),
-        "restecg": st.selectbox("Resting ECG", ["normal", "st-t abnormality", "lv hypertrophy"]),
-        "exang": st.selectbox("Exercise Induced Angina", [0, 1]),
-        "slope": st.selectbox("Slope of Peak Exercise ST", ["upsloping", "flat", "downsloping"]),
-        "thal": st.selectbox("Thalassemia", ["normal", "fixed defect", "reversible defect"])
+    user = {
+        "age": st.number_input("Age", 1, 120, 50),
+        "trestbps": st.number_input("Resting BP", 80, 200, 120),
+        "chol": st.number_input("Cholesterol", 100, 600, 240),
+        "thalch": st.number_input("Max Heart Rate", 60, 250, 150),
+        "oldpeak": st.number_input("ST Depression", 0.0, 10.0, 1.0),
+        "ca": st.number_input("Major Vessels (0-4)", 0, 4, 0),
+        "sex": st.selectbox("Sex", ["0", "1"]),
+        "cp": st.selectbox("Chest Pain Type", ["0", "1", "2", "3"]),
+        "fbs": st.selectbox("Fasting Blood Sugar > 120 mg/dl", ["0", "1"]),
+        "restecg": st.selectbox("Resting ECG", ["0", "1", "2"]),
+        "exang": st.selectbox("Exercise Induced Angina", ["0", "1"]),
+        "slope": st.selectbox("Slope", ["0", "1", "2"]),
+        "thal": st.selectbox("Thalassemia", ["0", "1", "2"])
     }
 
-    user_df = pd.DataFrame([user_input])
+    df_user = pd.DataFrame([user])
 
     if st.button("🔍 Predict"):
-        result = pipeline.predict(user_df)[0]
+        result = pipeline.predict(df_user)[0]
         if result == 1:
-            st.error("⚠️ High risk of heart disease")
+            st.error("⚠️ High Risk — Patient may have heart disease")
         else:
-            st.success("✅ Low risk of heart disease")
+            st.success("✅ Low Risk — Patient is likely healthy")
 
+# --------------------------------------------------------------
+# Analysis
+# --------------------------------------------------------------
+elif menu == "Analysis":
+    st.header("📊 Dataset Analysis")
 
-# ----------------------------- ANALYSIS
-elif tab == "📊 Analysis":
-    st.header("📊 Dataset Analytics")
     df = pd.read_csv(DATA_FILE)
-
-    st.subheader("Dataset Preview")
+    st.subheader("🔹 Preview Dataset")
     st.dataframe(df.head())
 
-    st.subheader("📈 Numeric Distributions")
-    numeric_cols = ['age','trestbps','chol','thalch','oldpeak','ca']
+    st.subheader("📈 Numeric Feature Distributions")
     fig, axes = plt.subplots(2, 3, figsize=(15, 8))
     axes = axes.ravel()
     for i, col in enumerate(numeric_cols):
@@ -117,23 +117,26 @@ elif tab == "📊 Analysis":
         axes[i].set_title(col)
     st.pyplot(fig)
 
-    st.subheader("🗂 Categorical Distributions")
-    categorical_cols = ['sex','cp','fbs','restecg','exang','slope','thal']
-    fig, axes = plt.subplots(3, 3, figsize=(15, 12))
+    st.subheader("🗂️ Categorical Feature Distributions")
+    fig, axes = plt.subplots(3, 3, figsize=(15, 10))
     axes = axes.ravel()
     for i, col in enumerate(categorical_cols):
         sns.countplot(x=col, data=df, ax=axes[i])
         axes[i].set_title(col)
     st.pyplot(fig)
 
-
-# ----------------------------- CONTACT
-elif tab == "📞 Contact":
+# --------------------------------------------------------------
+# Contact
+# --------------------------------------------------------------
+elif menu == "Contact":
     st.header("📞 Contact")
     st.write("""
-    👉 Developer: **Tamanna**  
-    📩 Email: tamanna@example.com  
-    🔗 LinkedIn: https://linkedin.com  
+    📧 Email: tamanna@example.com  
+    🔗 GitHub: https://github.com  
+    💼 Developer: Tamanna | CSE Project  
     """)
 
-st.markdown('<div style="text-align:center;margin-top:20px;">Made with ❤️ by Tamanna</div>', unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align:center;margin-top:20px;'>Made with ❤️ by Tamanna</div>",
+    unsafe_allow_html=True
+)
