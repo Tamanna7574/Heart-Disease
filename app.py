@@ -27,6 +27,7 @@ def load_or_train_model():
     st.warning("🔁 Model not found — training a new model...")
 
     df = pd.read_csv(DATA_FILE)
+    df = df.drop(columns=[col for col in df.columns if "Unnamed" in col], errors='ignore')
 
     # Separate features & target
     X = df.drop(TARGET_COL, axis=1)
@@ -81,25 +82,39 @@ elif menu == "🩺 Prediction":
     st.header("🧑‍⚕️ Patient Details")
 
     df = pd.read_csv(DATA_FILE)
+    df = df.drop(columns=[col for col in df.columns if "Unnamed" in col], errors='ignore')
     input_cols = df.drop(TARGET_COL, axis=1).columns.tolist()
     user_input = {}
 
+    # -------------------
+    # Collect user input
+    # -------------------
     for col in input_cols:
         if df[col].dtype == 'object':
             user_input[col] = st.selectbox(col, df[col].unique())
         elif df[col].dtype == 'bool' or df[col].nunique() == 2:
+            # Ensure valid 0/1 input for one-hot columns
             user_input[col] = int(st.selectbox(col, [0, 1]))
         else:
             user_input[col] = st.number_input(col, value=float(df[col].median()))
 
     user_input_df = pd.DataFrame([user_input])
 
-    # Ensure columns match pipeline's feature order
+    # -------------------
+    # Align columns with training
+    # -------------------
     try:
-        user_input_df = user_input_df[pipeline.named_steps['preprocessor'].feature_names_in_]
+        # Make sure all expected columns exist
+        for col in pipeline.named_steps['preprocessor'].get_feature_names_out():
+            if col not in user_input_df.columns:
+                user_input_df[col] = 0
+        user_input_df = user_input_df[pipeline.named_steps['preprocessor'].get_feature_names_out()]
     except:
-        pass  # fallback if feature names_in_ not available
+        pass  # fallback if feature_names_in_ not available
 
+    # -------------------
+    # Prediction
+    # -------------------
     if st.button("🔍 Predict"):
         prediction = pipeline.predict(user_input_df)[0]
         if prediction == 1:
@@ -112,6 +127,7 @@ elif menu == "🩺 Prediction":
 # ------------------------------
 elif menu == "📊 Data Analysis":
     df = pd.read_csv(DATA_FILE)
+    df = df.drop(columns=[col for col in df.columns if "Unnamed" in col], errors='ignore')
     st.header("📊 Dataset Overview")
     st.dataframe(df.head())
 
