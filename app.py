@@ -21,7 +21,8 @@ try:
     pipeline = joblib.load("heart_pipeline.pkl")
 except:
     st.warning("Pipeline not found. Training a new model...")
-    df = pd.read_csv(r"C:\Users\HP\Desktop\heart_dataset.csv")
+    df = pd.read_csv("heart_dataset.csv")
+
 
     numeric_cols = ['age','trestbps','chol','thalch','oldpeak','ca']
     categorical_cols = ['sex','cp','fbs','restecg','exang','slope','thal']
