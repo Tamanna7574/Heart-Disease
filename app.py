@@ -12,7 +12,9 @@ import os
 
 DATA_FILE = "heart_dataset.csv"
 MODEL_FILE = "heart_pipeline.pkl"
-TARGET_COL = "num"
+
+# possible target column names in different datasets
+POSSIBLE_TARGETS = ["num", "target", "output", "condition", "heart_disease"]
 
 numeric_cols = ['age', 'trestbps', 'chol', 'thalch', 'oldpeak', 'ca']
 categorical_cols = ['sex', 'cp', 'fbs', 'restecg', 'exang', 'slope', 'thal']
@@ -20,15 +22,30 @@ categorical_cols = ['sex', 'cp', 'fbs', 'restecg', 'exang', 'slope', 'thal']
 
 @st.cache_resource
 def load_or_train_model():
-    if os.path.exists(MODEL_FILE):
-        st.info("📌 Loaded trained model")
-        return joblib.load(MODEL_FILE)
-
-    st.warning("⚠️ Model not found — training new model...")
+    # load dataset
     df = pd.read_csv(DATA_FILE)
 
-    X = df.drop(TARGET_COL, axis=1)
-    y = (df[TARGET_COL] > 0).astype(int)
+    # auto-detect target column
+    target_col = None
+    for col in POSSIBLE_TARGETS:
+        if col in df.columns:
+            target_col = col
+            break
+
+    if target_col is None:
+        st.error("❌ Target column not found in CSV. Expected one of: " + ", ".join(POSSIBLE_TARGETS))
+        st.stop()
+
+    st.info(f"🎯 Target column detected automatically: `{target_col}`")
+
+    if os.path.exists(MODEL_FILE):
+        st.success("📌 Loaded trained model")
+        return joblib.load(MODEL_FILE), target_col
+
+    st.warning("⚠️ Model not found — training new model...")
+
+    X = df.drop(target_col, axis=1)
+    y = (df[target_col] > 0).astype(int)
 
     preprocessor = ColumnTransformer([
         ("num", StandardScaler(), numeric_cols),
@@ -43,34 +60,18 @@ def load_or_train_model():
     pipeline.fit(X, y)
     joblib.dump(pipeline, MODEL_FILE)
     st.success("🎉 Model trained & saved successfully")
-    return pipeline
+
+    return pipeline, target_col
 
 
-pipeline = load_or_train_model()
-
-
-# --------------------------------------------------------------
-# Streamlit UI
-# --------------------------------------------------------------
-
+pipeline, target_col = load_or_train_model()
 st.title("❤️ Heart Disease Prediction Dashboard")
 
 menu = st.sidebar.radio("📌 Navigate", ["Home", "Prediction", "Analysis", "Contact"])
 
-# --------------------------------------------------------------
-# Home
-# --------------------------------------------------------------
 if menu == "Home":
-    st.image("https://cdn-icons-png.flaticon.com/512/3774/3774299.png", width=200)
-    st.write("""
-    Welcome to the **Heart Disease Prediction System**  
-    Built using **Python + Machine Learning + Streamlit**  
-    Navigate using the sidebar to test prediction & explore data insights.
-    """)
+    st.write("Welcome to the ML Heart Disease Prediction App")
 
-# --------------------------------------------------------------
-# Prediction
-# --------------------------------------------------------------
 elif menu == "Prediction":
     st.header("🩺 Patient Details")
 
@@ -99,44 +100,10 @@ elif menu == "Prediction":
         else:
             st.success("✅ Low Risk — Patient is likely healthy")
 
-# --------------------------------------------------------------
-# Analysis
-# --------------------------------------------------------------
 elif menu == "Analysis":
     st.header("📊 Dataset Analysis")
-
     df = pd.read_csv(DATA_FILE)
-    st.subheader("🔹 Preview Dataset")
     st.dataframe(df.head())
 
-    st.subheader("📈 Numeric Feature Distributions")
-    fig, axes = plt.subplots(2, 3, figsize=(15, 8))
-    axes = axes.ravel()
-    for i, col in enumerate(numeric_cols):
-        sns.histplot(df[col], kde=True, ax=axes[i])
-        axes[i].set_title(col)
-    st.pyplot(fig)
-
-    st.subheader("🗂️ Categorical Feature Distributions")
-    fig, axes = plt.subplots(3, 3, figsize=(15, 10))
-    axes = axes.ravel()
-    for i, col in enumerate(categorical_cols):
-        sns.countplot(x=col, data=df, ax=axes[i])
-        axes[i].set_title(col)
-    st.pyplot(fig)
-
-# --------------------------------------------------------------
-# Contact
-# --------------------------------------------------------------
 elif menu == "Contact":
-    st.header("📞 Contact")
-    st.write("""
-    📧 Email: tamanna@example.com  
-    🔗 GitHub: https://github.com  
-    💼 Developer: Tamanna | CSE Project  
-    """)
-
-st.markdown(
-    "<div style='text-align:center;margin-top:20px;'>Made with ❤️ by Tamanna</div>",
-    unsafe_allow_html=True
-)
+    st.write("Made with ❤️ by Tamanna")
